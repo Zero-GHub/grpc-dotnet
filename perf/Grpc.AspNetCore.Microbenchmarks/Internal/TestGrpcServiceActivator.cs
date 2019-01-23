@@ -16,15 +16,27 @@
 
 #endregion
 
-using System;
-using System.Collections.Generic;
-using System.Text;
-using BenchmarkDotNet.Configs;
+using Grpc.AspNetCore.Server;
 
-namespace Grpc.AspNetCore.Performance
+namespace Grpc.AspNetCore.Microbenchmarks.Internal
 {
-    public class DefaultCoreConfigAttribute : Attribute, IConfigSource
+    public class TestGrpcServiceActivator<TGrpcService> : IGrpcServiceActivator<TGrpcService>
+        where TGrpcService : class
     {
-        public IConfig Config => new DefaultCoreConfig();
+        public readonly TGrpcService _service;
+
+        public TestGrpcServiceActivator(TGrpcService service)
+        {
+            _service = service;
+        }
+
+        public TGrpcService Create()
+        {
+            return _service;
+        }
+
+        public void Release(TGrpcService service)
+        {
+        }
     }
 }

@@ -16,27 +16,17 @@
 
 #endregion
 
-using Grpc.AspNetCore.Server;
+using System.Threading.Tasks;
+using Chat;
+using Grpc.Core;
 
-namespace Grpc.AspNetCore.Performance.Internal
+namespace Grpc.AspNetCore.Microbenchmarks.Internal
 {
-    public class TestGrpcServiceActivator<TGrpcService> : IGrpcServiceActivator<TGrpcService>
-        where TGrpcService : class
+    public class TestService
     {
-        public readonly TGrpcService _service;
-
-        public TestGrpcServiceActivator(TGrpcService service)
+        public virtual Task<ChatMessage> SayHello(ChatMessage request, ServerCallContext context)
         {
-            _service = service;
-        }
-
-        public TGrpcService Create()
-        {
-            return _service;
-        }
-
-        public void Release(TGrpcService service)
-        {
+            return Task.FromResult(new ChatMessage { Message = "Hello " + request.Name });
         }
     }
 }

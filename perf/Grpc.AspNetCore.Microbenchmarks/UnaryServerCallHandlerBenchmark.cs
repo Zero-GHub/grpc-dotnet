@@ -21,7 +21,7 @@ using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Chat;
 using Google.Protobuf;
-using Grpc.AspNetCore.Performance.Internal;
+using Grpc.AspNetCore.Microbenchmarks.Internal;
 using Grpc.AspNetCore.Server;
 using Grpc.AspNetCore.Server.Internal;
 using Grpc.Core;
@@ -30,7 +30,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Grpc.AspNetCore.Performance
+namespace Grpc.AspNetCore.Microbenchmarks
 {
     public class UnaryServerCallHandlerBenchmark
     {

@@ -16,17 +16,13 @@
 
 #endregion
 
-using System.Threading.Tasks;
-using Chat;
-using Grpc.Core;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 
-namespace Grpc.AspNetCore.Performance.Internal
+namespace Grpc.AspNetCore.Microbenchmarks.Internal
 {
-    public class TestService
+    public class TestHttpResponseTrailersFeature : IHttpResponseTrailersFeature
     {
-        public virtual Task<ChatMessage> SayHello(ChatMessage request, ServerCallContext context)
-        {
-            return Task.FromResult(new ChatMessage { Message = "Hello " + request.Name });
-        }
+        public IHeaderDictionary Trailers { get; set; }
     }
 }
