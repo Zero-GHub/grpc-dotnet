@@ -30,24 +30,31 @@ namespace Grpc.AspNetCore.Server.Internal
         private const int MessageDelimiterSize = 4; // how many bytes it takes to encode "Message-Length"
         private const int HeaderSize = MessageDelimiterSize + 1; // message length + compression flag
 
-        public static async Task WriteMessageAsync(PipeWriter bufferWriter, byte[] messageData, bool flush = false)
+        public static Task WriteMessageAsync(PipeWriter pipeWriter, byte[] messageData, bool flush = false)
         {
-            WriteHeader(bufferWriter, messageData.Length);
-            bufferWriter.Write(messageData);
+            WriteHeader(pipeWriter, messageData.Length);
+            pipeWriter.Write(messageData);
 
             if (flush)
             {
-                await bufferWriter.FlushAsync();
+                return FlushWriterAsync(pipeWriter);
             }
+
+            return Task.CompletedTask;
+        }
+
+        private static async Task FlushWriterAsync(PipeWriter pipeWriter)
+        {
+            await pipeWriter.FlushAsync();
         }
 
         public static void WriteHeader(IBufferWriter<byte> bufferWriter, int length)
         {
-            Span<byte> headerData = stackalloc byte[HeaderSize];
+            Span<byte> headerData = bufferWriter.GetSpan(HeaderSize);
             headerData[0] = 0;
             EncodeMessageLength(length, headerData.Slice(1));
 
-            bufferWriter.Write(headerData);
+            bufferWriter.Advance(HeaderSize);
         }
 
         public static void EncodeMessageLength(int messageLength, Span<byte> destination)
@@ -88,32 +95,86 @@ namespace Grpc.AspNetCore.Server.Internal
             return (int)result;
         }
 
-        public static bool TryReadHeader(ReadOnlySequence<byte> buffer, out int messageLength)
+        public static bool TryReadHeader(ReadOnlySequence<byte> buffer, out bool compressed, out int messageLength)
         {
             if (buffer.Length < HeaderSize)
             {
+                compressed = false;
                 messageLength = 0;
                 return false;
             }
 
-            Span<byte> headerData = stackalloc byte[HeaderSize];
-            buffer.Slice(0, HeaderSize).CopyTo(headerData);
-
-            var compressionFlag = headerData[0];
-            if (compressionFlag != 0)
+            if (buffer.IsSingleSegment)
             {
-                // TODO(jtattermusch): support compressed messages
-                throw new IOException("Compressed messages are not yet supported.");
+                var headerData = buffer.First.Span.Slice(0, HeaderSize);
+
+                compressed = ReadCompressedFlag(headerData[0]);
+                messageLength = DecodeMessageLength(headerData.Slice(1));
+            }
+            else
+            {
+                Span<byte> headerData = stackalloc byte[HeaderSize];
+                buffer.Slice(0, HeaderSize).CopyTo(headerData);
+
+                compressed = ReadCompressedFlag(headerData[0]);
+                messageLength = DecodeMessageLength(headerData.Slice(1));
             }
 
-            messageLength = DecodeMessageLength(headerData.Slice(1, 4));
             return true;
         }
 
-        public static async ValueTask<byte[]> ReadMessageAsync(PipeReader pipeReader)
+        private static bool ReadCompressedFlag(byte flag)
         {
-            var result = await pipeReader.ReadAsync();
+            if (flag == 0)
+            {
+                return false;
+            }
+            else if (flag == 1)
+            {
+                return true;
+            }
+            else
+            {
+                throw new InvalidOperationException("Unexpected compressed flag value in message header.");
+            }
+        }
 
+        public static ValueTask<byte[]> ReadMessageAsync(PipeReader pipeReader)
+        {
+            var resultTask = pipeReader.ReadAsync();
+
+            if (resultTask.IsCompletedSuccessfully)
+            {
+                var result = resultTask.Result;
+
+                var message = ReadMessage(result);
+
+                // Move pipe to the end of the read message
+                pipeReader.AdvanceTo(result.Buffer.End);
+
+                return new ValueTask<byte[]>(message);
+            }
+            else
+            {
+                // Avoid state machine when
+                return ReadMessageSlowAsync(resultTask, pipeReader);
+            }
+        }
+
+        private static async ValueTask<byte[]> ReadMessageSlowAsync(ValueTask<ReadResult> task, PipeReader pipeReader)
+        {
+            var result = await task;
+
+            var message = ReadMessage(result);
+
+            // Move pipe to the end of the read message
+            pipeReader.AdvanceTo(result.Buffer.End);
+
+            return message;
+        }
+
+        private static byte[] ReadMessage(ReadResult result)
+        {
             if (result.IsCompleted)
             {
                 return null;
@@ -121,9 +182,15 @@ namespace Grpc.AspNetCore.Server.Internal
 
             var buffer = result.Buffer;
 
-            if (!TryReadHeader(buffer, out var messageLength))
+            if (!TryReadHeader(buffer, out var compressed, out var messageLength))
             {
                 throw new InvalidOperationException("Unable to read the message header.");
+            }
+
+            if (compressed)
+            {
+                // TODO(jtattermusch): support compressed messages
+                throw new IOException("Compressed messages are not yet supported.");
             }
 
             if (buffer.Length < HeaderSize + messageLength)
@@ -134,9 +201,6 @@ namespace Grpc.AspNetCore.Server.Internal
             var messageBuffer = buffer.Slice(HeaderSize, messageLength);
 
             var messageData = messageBuffer.ToArray();
-
-            // Move pipe to the end of the read message
-            pipeReader.AdvanceTo(buffer.End);
 
             return messageData;
         }
