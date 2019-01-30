@@ -42,11 +42,11 @@ namespace Grpc.AspNetCore.Server.Internal
             }
 
             return Task.CompletedTask;
-        }
 
-        private static async Task FlushWriterAsync(PipeWriter pipeWriter)
-        {
-            await pipeWriter.FlushAsync();
+            async Task FlushWriterAsync(PipeWriter p)
+            {
+                await p.FlushAsync();
+            }
         }
 
         private static void WriteHeader(PipeWriter pipeWriter, int length)
@@ -149,18 +149,18 @@ namespace Grpc.AspNetCore.Server.Internal
             {
                 return ReadMessageSlowAsync(resultTask, pipeReader);
             }
-        }
 
-        private static async ValueTask<byte[]> ReadMessageSlowAsync(ValueTask<ReadResult> task, PipeReader pipeReader)
-        {
-            var result = await task;
+            async ValueTask<byte[]> ReadMessageSlowAsync(ValueTask<ReadResult> task, PipeReader p)
+            {
+                var result = await task;
 
-            var message = ReadMessage(result);
+                var message = ReadMessage(result);
 
-            // Move pipe to the end of the read message
-            pipeReader.AdvanceTo(result.Buffer.End);
+                // Move pipe to the end of the read message
+                p.AdvanceTo(result.Buffer.End);
 
-            return message;
+                return message;
+            }
         }
 
         private static byte[] ReadMessage(ReadResult result)
