@@ -17,6 +17,8 @@
 #endregion
 
 using System;
+using System.Buffers;
+using System.IO.Pipelines;
 using System.Threading.Tasks;
 using Grpc.Core;
 using Microsoft.AspNetCore.Http;
@@ -36,10 +38,10 @@ namespace Grpc.AspNetCore.Server.Internal
         public override async Task HandleCallAsync(HttpContext httpContext)
         {
             httpContext.Response.ContentType = "application/grpc";
-            //httpContext.Response.Headers["grpc-encoding"] = "identity";
             httpContext.Response.Headers.Append("grpc-encoding", "identity");
 
-            var requestPayload = await StreamUtils.ReadMessageAsync(httpContext.Request.Body);
+            var requestPayload = await PipeUtils.ReadMessageAsync(httpContext.Request.BodyPipe);
+
             // TODO: make sure the payload is not null
             var request = Method.RequestMarshaller.Deserializer(requestPayload);
 
@@ -60,7 +62,7 @@ namespace Grpc.AspNetCore.Server.Internal
             // TODO: make sure the response is not null
             var responsePayload = Method.ResponseMarshaller.Serializer(response);
 
-            await StreamUtils.WriteMessageAsync(httpContext.Response.Body, responsePayload, 0, responsePayload.Length);
+            await PipeUtils.WriteMessageAsync(httpContext.Response.BodyPipe, responsePayload, flush: true);
 
             httpContext.Response.AppendTrailer(Constants.GrpcStatusHeader, Constants.GrpcStatusOk);
         }
