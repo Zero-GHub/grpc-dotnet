@@ -52,7 +52,7 @@ namespace Grpc.AspNetCore.Server.Internal
             // TODO: make sure the response is not null
             var responsePayload = Method.ResponseMarshaller.Serializer(response);
 
-            await PipeUtils.WriteMessageAsync(httpContext.Response.BodyPipe, responsePayload, flush: true);
+            await httpContext.Response.BodyPipe.WriteMessageAsync(responsePayload, flush: true);
 
             httpContext.Response.AppendTrailer(Constants.GrpcStatusHeader, Constants.GrpcStatusOk);
         }

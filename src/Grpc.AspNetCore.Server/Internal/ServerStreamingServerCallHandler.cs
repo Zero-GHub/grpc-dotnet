@@ -38,7 +38,7 @@ namespace Grpc.AspNetCore.Server.Internal
             httpContext.Response.ContentType = "application/grpc";
             httpContext.Response.Headers.Append("grpc-encoding", "identity");
 
-            var requestPayload = await PipeUtils.ReadMessageAsync(httpContext.Request.BodyPipe);
+            var requestPayload = await httpContext.Request.BodyPipe.ReadMessageAsync();
             // TODO: make sure the payload is not null
             var request = Method.RequestMarshaller.Deserializer(requestPayload);
 

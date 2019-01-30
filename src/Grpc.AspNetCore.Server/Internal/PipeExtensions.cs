@@ -19,18 +19,19 @@
 
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.IO;
 using System.IO.Pipelines;
 using System.Threading.Tasks;
 
 namespace Grpc.AspNetCore.Server.Internal
 {
-    internal static class PipeUtils
+    internal static class PipeExtensions
     {
         private const int MessageDelimiterSize = 4; // how many bytes it takes to encode "Message-Length"
         private const int HeaderSize = MessageDelimiterSize + 1; // message length + compression flag
 
-        public static Task WriteMessageAsync(PipeWriter pipeWriter, byte[] messageData, bool flush = false)
+        public static Task WriteMessageAsync(this PipeWriter pipeWriter, byte[] messageData, bool flush = false)
         {
             WriteHeader(pipeWriter, messageData.Length);
             pipeWriter.Write(messageData);
@@ -48,29 +49,23 @@ namespace Grpc.AspNetCore.Server.Internal
             await pipeWriter.FlushAsync();
         }
 
-        public static void WriteHeader(IBufferWriter<byte> bufferWriter, int length)
+        private static void WriteHeader(PipeWriter pipeWriter, int length)
         {
-            Span<byte> headerData = bufferWriter.GetSpan(HeaderSize);
+            Span<byte> headerData = pipeWriter.GetSpan(HeaderSize);
             headerData[0] = 0;
             EncodeMessageLength(length, headerData.Slice(1));
 
-            bufferWriter.Advance(HeaderSize);
+            pipeWriter.Advance(HeaderSize);
         }
 
-        public static void EncodeMessageLength(int messageLength, Span<byte> destination)
+        private static void EncodeMessageLength(int messageLength, Span<byte> destination)
         {
             if (destination.Length < MessageDelimiterSize)
             {
                 throw new ArgumentException("Buffer too small to encode message length.");
             }
 
-            var unsignedValue = (ulong)messageLength;
-            for (var i = MessageDelimiterSize - 1; i >= 0; i--)
-            {
-                // msg length stored in big endian
-                destination[i] = (byte)(unsignedValue & 0xff);
-                unsignedValue >>= 8;
-            }
+            BinaryPrimitives.WriteUInt32BigEndian(destination, (uint)messageLength);
         }
 
         private static int DecodeMessageLength(ReadOnlySpan<byte> buffer)
@@ -80,12 +75,7 @@ namespace Grpc.AspNetCore.Server.Internal
                 throw new ArgumentException("Buffer too small to decode message length.");
             }
 
-            ulong result = 0;
-            for (int i = 0; i < MessageDelimiterSize; i++)
-            {
-                // msg length stored in big endian
-                result = (result << 8) + buffer[i];
-            }
+            var result = BinaryPrimitives.ReadUInt32BigEndian(buffer);
 
             if (result > int.MaxValue)
             {
@@ -95,7 +85,7 @@ namespace Grpc.AspNetCore.Server.Internal
             return (int)result;
         }
 
-        public static bool TryReadHeader(ReadOnlySequence<byte> buffer, out bool compressed, out int messageLength)
+        private static bool TryReadHeader(ReadOnlySequence<byte> buffer, out bool compressed, out int messageLength)
         {
             if (buffer.Length < HeaderSize)
             {
@@ -104,7 +94,7 @@ namespace Grpc.AspNetCore.Server.Internal
                 return false;
             }
 
-            if (buffer.IsSingleSegment)
+            if (buffer.First.Length >= HeaderSize)
             {
                 var headerData = buffer.First.Span.Slice(0, HeaderSize);
 
@@ -139,10 +129,11 @@ namespace Grpc.AspNetCore.Server.Internal
             }
         }
 
-        public static ValueTask<byte[]> ReadMessageAsync(PipeReader pipeReader)
+        public static ValueTask<byte[]> ReadMessageAsync(this PipeReader pipeReader)
         {
             var resultTask = pipeReader.ReadAsync();
 
+            // Avoid state machine when sync
             if (resultTask.IsCompletedSuccessfully)
             {
                 var result = resultTask.Result;
@@ -156,7 +147,6 @@ namespace Grpc.AspNetCore.Server.Internal
             }
             else
             {
-                // Avoid state machine when
                 return ReadMessageSlowAsync(resultTask, pipeReader);
             }
         }

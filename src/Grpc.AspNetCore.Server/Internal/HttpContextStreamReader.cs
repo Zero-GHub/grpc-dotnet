@@ -43,7 +43,7 @@ namespace Grpc.AspNetCore.Server.Internal
 
         public async ValueTask<bool> MoveNextAsync()
         {
-            var requestPayload = await PipeUtils.ReadMessageAsync(_httpContext.Request.BodyPipe);
+            var requestPayload = await _httpContext.Request.BodyPipe.ReadMessageAsync();
 
             if (requestPayload == null)
             {

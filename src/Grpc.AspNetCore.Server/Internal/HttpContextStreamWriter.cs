@@ -44,7 +44,7 @@ namespace Grpc.AspNetCore.Server.Internal
             // Flush messages unless WriteOptions.Flags has BufferHint set
             var flush = ((WriteOptions?.Flags ?? default) & WriteFlags.BufferHint) != WriteFlags.BufferHint;
 
-            return PipeUtils.WriteMessageAsync(_httpContext.Response.BodyPipe, responsePayload, flush);
+            return _httpContext.Response.BodyPipe.WriteMessageAsync(responsePayload, flush);
         }
     }
 }
