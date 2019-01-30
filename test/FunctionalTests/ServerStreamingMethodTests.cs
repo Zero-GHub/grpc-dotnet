@@ -31,7 +31,7 @@ namespace Grpc.AspNetCore.FunctionalTests
     public class ServerStreamingMethodTests : FunctionalTestBase
     {
         [Test]
-        public async Task SayHellos_NoBuffering_SuccessResponsesStreamed()
+        public async Task NoBuffering_SuccessResponsesStreamed()
         {
             // Arrange
             var requestMessage = new HelloRequest

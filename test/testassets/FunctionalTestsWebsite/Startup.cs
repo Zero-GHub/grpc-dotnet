@@ -35,7 +35,7 @@ namespace FunctionalTestsWebsite
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddGrpc();
-            services.AddSingleton<IncrementingCounter>();
+            services.AddScoped<IncrementingCounter>();
 
             // When the site is run from the test project a signaler will already be registered
             // This will add a default one if the site is run standalone

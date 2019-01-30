@@ -43,11 +43,11 @@ namespace Grpc.AspNetCore.Server.Internal
 
         public async ValueTask<bool> MoveNextAsync()
         {
-            var requestPayload = await StreamUtils.ReadMessageAsync(_httpContext.Request.Body);
+            var requestPayload = await _httpContext.Request.BodyPipe.ReadMessageAsync(supportMultipleMessages: true);
 
             if (requestPayload == null)
             {
-                Current = default(TRequest);
+                Current = default;
                 return false;
             }
 

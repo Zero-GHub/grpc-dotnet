@@ -32,7 +32,7 @@ namespace Grpc.AspNetCore.FunctionalTests
     public class DuplexStreamingMethodTests : FunctionalTestBase
     {
         [Test]
-        public async Task Chat_MultipleMessagesFromOneClient_SuccessResponses()
+        public async Task MultipleMessagesFromOneClient_SuccessResponses()
         {
             // Arrange
             var ms = new MemoryStream();

@@ -17,6 +17,7 @@
 #endregion
 
 using System;
+using System.Buffers.Binary;
 using System.IO;
 using System.Threading.Tasks;
 using Google.Protobuf;
@@ -135,17 +136,13 @@ namespace Grpc.AspNetCore.FunctionalTests.Infrastructure
                 throw new ArgumentException("Buffer too small to decode message length.");
             }
 
-            var result = 0UL;
-            for (var i = 0; i < MessageDelimiterSize; i++)
-            {
-                // msg length stored in big endian
-                result = (result << 8) + buffer[i];
-            }
+            var result = BinaryPrimitives.ReadUInt32BigEndian(buffer);
 
             if (result > int.MaxValue)
             {
                 throw new IOException("Message too large: " + result);
             }
+
             return (int)result;
         }
 
@@ -156,13 +153,7 @@ namespace Grpc.AspNetCore.FunctionalTests.Infrastructure
                 throw new ArgumentException("Buffer too small to encode message length.");
             }
 
-            var unsignedValue = (ulong)messageLength;
-            for (var i = MessageDelimiterSize - 1; i >= 0; i--)
-            {
-                // msg length stored in big endian
-                destination[i] = (byte)(unsignedValue & 0xff);
-                unsignedValue >>= 8;
-            }
+            BinaryPrimitives.WriteUInt32BigEndian(destination, (uint)messageLength);
         }
     }
 }
