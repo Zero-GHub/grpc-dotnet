@@ -16,6 +16,7 @@
 
 #endregion
 
+using System;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -48,6 +49,45 @@ namespace Grpc.AspNetCore.FunctionalTests
                 new StreamContent(stream)).DefaultTimeout();
 
             // Assert
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("identity", response.Headers.GetValues("grpc-encoding").Single());
+            Assert.AreEqual("application/grpc", response.Content.Headers.ContentType.MediaType);
+
+            var responseMessage = MessageHelpers.AssertReadMessage<HelloReply>(await response.Content.ReadAsByteArrayAsync().DefaultTimeout());
+            Assert.AreEqual("Hello World", responseMessage.Message);
+        }
+
+        [Test]
+        public async Task SayHello_ValidRequest_SuccessResponsedfgdfg()
+        {
+            // Arrange
+            var requestMessage = new HelloRequest
+            {
+                Name = "World"
+            };
+
+            var ms = new MemoryStream();
+            await MessageHelpers.WriteMessageAsync(ms, requestMessage).DefaultTimeout();
+
+            var requestStream = new AwaitableMemoryStream();
+
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, "Greet.Greeter/SayHello");
+            httpRequest.Content = new StreamContent(requestStream);
+
+            // Act
+            var responseTask = Fixture.Client.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead);
+
+            // Assert
+            Assert.IsFalse(responseTask.IsCompleted, "Server should wait for client to finish streaming");
+
+            requestStream.SendData(ms.ToArray());
+
+            await Task.Delay(TimeSpan.FromSeconds(0.5));
+
+            requestStream.SendData(Array.Empty<byte>());
+
+            var response = await responseTask.DefaultTimeout();
+
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
             Assert.AreEqual("identity", response.Headers.GetValues("grpc-encoding").Single());
             Assert.AreEqual("application/grpc", response.Content.Headers.ContentType.MediaType);

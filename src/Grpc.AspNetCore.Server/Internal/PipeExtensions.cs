@@ -129,52 +129,90 @@ namespace Grpc.AspNetCore.Server.Internal
             }
         }
 
-        public static ValueTask<byte[]> ReadMessageAsync(this PipeReader pipeReader)
+        public static async ValueTask<byte[]> ReadMessageAsync(this PipeReader input)
         {
-            var resultTask = pipeReader.ReadAsync();
+            //var resultTask = pipeReader.ReadAsync();
 
-            // Avoid state machine when sync
-            if (resultTask.IsCompletedSuccessfully)
+            //var result = resultTask.Result;
+
+            while (true)
             {
-                var result = resultTask.Result;
+                var result = await input.ReadAsync();
+                var buffer = result.Buffer;
 
-                var message = ReadMessage(result);
+                try
+                {
+                    if (result.IsCanceled)
+                    {
+                        throw new InvalidOperationException("Incoming message cancelled.");
+                    }
 
-                // Move pipe to the end of the read message
-                pipeReader.AdvanceTo(result.Buffer.End);
+                    if (!buffer.IsEmpty)
+                    {
+                        if (TryReadMessage(ref buffer, out var message))
+                        {
+                            if (buffer.Length > 0)
+                            {
+                                throw new InvalidOperationException("Additional data after the message received.");
+                            }
 
-                return new ValueTask<byte[]>(message);
+                            return message;
+                        }
+                    }
+
+                    if (result.IsCompleted)
+                    {
+                        throw new InvalidOperationException("Incomplete message.");
+                    }
+                }
+                finally
+                {
+                    // The buffer was sliced up to where it was consumed, so we can just advance to the start.
+                    // We mark examined as buffer.End so that if we didn't receive a full frame, we'll wait for more data
+                    // before yielding the read again.
+                    input.AdvanceTo(buffer.Start, buffer.End);
+                }
             }
-            else
-            {
-                return ReadMessageSlowAsync(resultTask, pipeReader);
-            }
 
-            async ValueTask<byte[]> ReadMessageSlowAsync(ValueTask<ReadResult> task, PipeReader p)
-            {
-                var result = await task;
+            //// Avoid state machine when sync
+            //if (resultTask.IsCompletedSuccessfully)
+            //{
+            //    var result = resultTask.Result;
 
-                var message = ReadMessage(result);
+            //    if (TryReadMessage(result, out var message))
+            //    {
+            //        // Move pipe to the end of the read message
+            //        pipeReader.AdvanceTo(result.Buffer.End);
 
-                // Move pipe to the end of the read message
-                p.AdvanceTo(result.Buffer.End);
+            //        return new ValueTask<byte[]>(message);
+            //    }
+            //}
+            //else
+            //{
+            //    return ReadMessageSlowAsync(resultTask, pipeReader);
+            //}
 
-                return message;
-            }
+            //async ValueTask<byte[]> ReadMessageSlowAsync(ValueTask<ReadResult> task, PipeReader p)
+            //{
+            //    var result = await task;
+
+            //    if (TryReadMessage(result, out var message))
+            //    {
+
+            //        // Move pipe to the end of the read message
+            //        p.AdvanceTo(result.Buffer.End);
+
+            //        return message;
+            //    }
+            //}
         }
 
-        private static byte[] ReadMessage(ReadResult result)
+        private static bool TryReadMessage(ref ReadOnlySequence<byte> buffer, out byte[] message)
         {
-            if (result.IsCompleted)
-            {
-                return null;
-            }
-
-            var buffer = result.Buffer;
-
             if (!TryReadHeader(buffer, out var compressed, out var messageLength))
             {
-                throw new InvalidOperationException("Unable to read the message header.");
+                message = null;
+                return false;
             }
 
             if (compressed)
@@ -185,14 +223,98 @@ namespace Grpc.AspNetCore.Server.Internal
 
             if (buffer.Length < HeaderSize + messageLength)
             {
-                throw new InvalidOperationException($"Unable to read complete message data. Expected {messageLength} bytes.");
+                message = null;
+                return false;
             }
 
+            // Convert message to byte array
             var messageBuffer = buffer.Slice(HeaderSize, messageLength);
+            message = messageBuffer.ToArray();
 
-            var messageData = messageBuffer.ToArray();
+            // Update buffer to remove message
+            buffer = buffer.Slice(HeaderSize + messageLength);
 
-            return messageData;
+            return true;
         }
+
+        public static async ValueTask<byte[]> ReadMessageAsyncsdfsdf(this PipeReader input)
+        {
+            //var resultTask = pipeReader.ReadAsync();
+
+            //var result = resultTask.Result;
+
+            while (true)
+            {
+                var result = await input.ReadAsync();
+                var buffer = result.Buffer;
+
+                try
+                {
+                    if (result.IsCanceled)
+                    {
+                        throw new InvalidOperationException("Incoming message cancelled.");
+                    }
+
+                    if (!buffer.IsEmpty)
+                    {
+                        if (TryReadMessage(ref buffer, out var message))
+                        {
+                            return message;
+                        }
+                    }
+
+                    if (result.IsCompleted)
+                    {
+                        if (!buffer.IsEmpty)
+                        {
+                            throw new InvalidDataException("Connection terminated while reading a message.");
+                        }
+
+                        throw new InvalidOperationException("Incoming message cancelled.");
+                    }
+                }
+                finally
+                {
+                    // The buffer was sliced up to where it was consumed, so we can just advance to the start.
+                    // We mark examined as buffer.End so that if we didn't receive a full frame, we'll wait for more data
+                    // before yielding the read again.
+                    input.AdvanceTo(buffer.Start, buffer.End);
+                }
+            }
+
+            //// Avoid state machine when sync
+            //if (resultTask.IsCompletedSuccessfully)
+            //{
+            //    var result = resultTask.Result;
+
+            //    if (TryReadMessage(result, out var message))
+            //    {
+            //        // Move pipe to the end of the read message
+            //        pipeReader.AdvanceTo(result.Buffer.End);
+
+            //        return new ValueTask<byte[]>(message);
+            //    }
+            //}
+            //else
+            //{
+            //    return ReadMessageSlowAsync(resultTask, pipeReader);
+            //}
+
+            //async ValueTask<byte[]> ReadMessageSlowAsync(ValueTask<ReadResult> task, PipeReader p)
+            //{
+            //    var result = await task;
+
+            //    if (TryReadMessage(result, out var message))
+            //    {
+
+            //        // Move pipe to the end of the read message
+            //        p.AdvanceTo(result.Buffer.End);
+
+            //        return message;
+            //    }
+            //}
+        }
+
+
     }
 }
