@@ -34,7 +34,7 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <param name="services">The <see cref="IServiceCollection"/> for adding services.</param>
         /// <returns></returns>
         // TODO: Options?
-        public static IServiceCollection AddGrpc(this IServiceCollection services)
+        public static IGrpcServerBuilder AddGrpc(this IServiceCollection services)
         {
             if (services == null)
             {
@@ -44,7 +44,20 @@ namespace Microsoft.Extensions.DependencyInjection
             services.TryAddSingleton<GrpcMarkerService>();
             services.TryAddScoped(typeof(IGrpcServiceActivator<>), typeof(DefaultGrpcServiceActivator<>));
 
-            return services;
+            return new GrpcServerBuilder(services);
+        }
+
+        public static IGrpcServerBuilder AddGrpc(this IServiceCollection services, Action<GrpcServiceOptions> configureOptions)
+        {
+            if (services == null)
+            {
+                throw new ArgumentNullException(nameof(services));
+            }
+            services.AddRouting();
+            services.TryAddSingleton<GrpcMarkerService>();
+            services.TryAddScoped(typeof(IGrpcServiceActivator<>), typeof(DefaultGrpcServiceActivator<>));
+
+            return services.Configure(configureOptions).AddGrpc();
         }
     }
 }
